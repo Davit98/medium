@@ -153,14 +153,11 @@ async def build_graph(
             messages = state["messages"][-(summary_thr + 1):]
 
             conversation_history = []
-            relevant_indices = []
             for i, msg in enumerate(messages):
                 if isinstance(msg, HumanMessage):
                     conversation_history.append(f"Human: {msg.content}")
-                    relevant_indices.append(i)
                 elif isinstance(msg, AIMessage) and not msg.tool_calls:
                     conversation_history.append(f"AI: {msg.content}")
-                    relevant_indices.append(i)
 
             human_ai_messages = "\n".join([item for item in conversation_history[:-1]])
             if summary:
