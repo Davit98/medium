@@ -44,8 +44,9 @@ async def dataframe_assistant_chat(
         has_yielded = False
         async for msg, metadata in stream:
             if metadata['langgraph_node'] in {'default_assistant', 'synthesizer', 'agent'}:
-                yield msg.content
-                has_yielded = True
+                if msg.content:
+                    yield msg.content
+                    has_yielded = True
                 
         if not has_yielded:
             yield "I apologize, but I couldn't generate a proper response to your question. Could you please rephrase or provide more context?"

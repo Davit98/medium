@@ -20,5 +20,5 @@ curl http://localhost:11434/api/generate -d '{"model": "gpt-oss:20b", "keep_aliv
 ## Start the API
 
 ```bash
-uvicorn src.api.app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn src.api.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
