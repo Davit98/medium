@@ -58,7 +58,7 @@ def build_decision_tree_classifier(target_variable: str, average: str = "weighte
         "min_samples_split": [2, 5, 10],
         "min_samples_leaf": [1, 2, 4]
     }
-    cv_strategy = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+    cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     grid_search = GridSearchCV(
         estimator=clf,
         param_grid=param_grid,
