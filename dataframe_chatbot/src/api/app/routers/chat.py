@@ -20,7 +20,6 @@ async def dataframe_assistant_chat(
     **Parameters:**
 
     - `chat_req` (`AssistantChatRequest`): The user's input message and optional session ID for conversation continuity.
-    - `api_key` (`APIKey`): A valid API key for authentication.
 
     **Returns:**
 
