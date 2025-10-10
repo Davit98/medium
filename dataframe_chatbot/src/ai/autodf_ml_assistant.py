@@ -152,10 +152,11 @@ async def build_graph(
             messages = state["messages"][-(summary_thr + 1):]
 
             conversation_history = []
-            for i, msg in enumerate(messages):
+            for msg in messages:
                 if isinstance(msg, HumanMessage):
                     conversation_history.append(f"Human: {msg.content}")
-                elif isinstance(msg, AIMessage) and not msg.tool_calls:
+                    
+                if isinstance(msg, AIMessage) and not msg.tool_calls:
                     conversation_history.append(f"AI: {msg.content}")
 
             human_ai_messages = "\n".join([item for item in conversation_history[:-1]])
@@ -364,7 +365,7 @@ async def build_graph(
     # Define nodes: these do the work
     builder.add_node("conversation", conversation_node)
     builder.add_node("pandas_agent", pandas_agent_node)
-    builder.add_node("ml_agent", ml_agent_node)  # Add the new ML agent node
+    builder.add_node("ml_agent", ml_agent_node)
 
     # Define edges: these determine how the control flow moves
     builder.add_edge(START, "conversation")

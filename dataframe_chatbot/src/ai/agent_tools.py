@@ -204,6 +204,8 @@ def model_inference(feature_values: Dict[str, list]) -> Dict[str, list]:
     class_to_label = model['class_to_label']
     
     X_test = pd.DataFrame.from_dict(feature_values)
+    for col, encoding in list(model['column_ordinal_encodings'].items())[:-1]:
+        X_test[col] = X_test[col].apply(lambda x: encoding[x])
 
     predicted_classes = clf.predict(X_test)
     prediction = [class_to_label[str(item)] for item in predicted_classes]
