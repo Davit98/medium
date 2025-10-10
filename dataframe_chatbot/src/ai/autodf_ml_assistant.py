@@ -63,8 +63,8 @@ async def build_graph(
     Tuple[CompiledStateGraph, SqliteSaver],
 ]:
     """
-    Construct and return a compiled LangChain StateGraph tailored for conversational reasoning using conditional
-    routing between a default assistant, ML Agent and Pandas DataFrame Agent.
+    Construct and return a compiled LangChain StateGraph tailored for conversational reasoning using conditional routing 
+    between ML Agent and Pandas DataFrame Agent.
 
     Parameters
     ----------
@@ -74,8 +74,7 @@ async def build_graph(
     Returns
     -------
     graph : CompiledStateGraph
-        A compiled LangChain state graph that routes user messages through a conversation node to either a Pandas DataFrame Agent, 
-        ML agent or default assistant.
+        A compiled LangChain state graph that routes user messages through a conversation node to either Pandas DataFrame Agent or ML agent.
     graph, memory : Tuple[CompiledStateGraph, SqliteSaver]
         If `return_memory` is True, returns both the compiled StateGraph and the SqliteSaver for checkpointing and
         state persistence.
@@ -248,35 +247,6 @@ async def build_graph(
             )
             return {"messages": messages + [{"role": "assistant", "content": user_friendly_msg}], "summary": summary}
 
-
-    # Node
-    def default_node(state: State):
-        n_msg = len(state["messages"])
-
-        if n_msg < summary_thr:
-            messages = state["messages"]
-        else:
-            idx = (n_msg % summary_thr) + n_msg_overlap
-            messages = state["messages"][-idx:]
-
-        if summary := state.get("summary"):
-            summary_prompt = f"""
-            For the reference here is a summary of conversation earlier: '{summary}'
-            """
-        else:
-            summary_prompt = ""
-
-        prompt = [SystemMessage(content=f"""
-        You are helpful assistant responsible for giving an accurate answer to user query. 
-        {summary_prompt}""")] + messages
-
-        response = llm.invoke(prompt)
-        
-        if not response.content or not response.content.strip():
-            logger.warning(f"LLM returned empty response for prompt: {messages[-1].content}")
-
-        return {"messages": response, "summary": summary}
-
     # Node
     def ml_agent_node(state: State):        
         # Create Python REPL tool with access to ML functions
@@ -307,14 +277,15 @@ async def build_graph(
 
         Available tools:
         - python_tool: A Python shell with access to a function 'build_decision_tree_classifier(target_variable, average)' for building decision tree models, 
-        'model_inference(feature_values)' for using the trained decision tree model for making predictions, 'compute_accuracy_metrics(target_variable, average)' 
+        'model_inference(feature_values: Dict[str, list])' for using the trained decision tree model for making predictions, 'compute_accuracy_metrics(target_variable, average)' 
         for evaluating a trained decision tree model at user request, and 'export_decision_tree_to_text()' for exporting a trained decision tree model into a 
         human-readable text representation containing the decision rules of the tree, formatted as nested if/else statements.
 
-        - To build a decision tree model call "build_decision_tree_classifier(target_variable, 'weighted')".
-        - To make inference call "model_inference(values)"
+        - To build a decision tree model call "build_decision_tree_classifier(target_variable)". In case target variable has two classes (0/1)
+          make sure to call "build_decision_tree_classifier(target_variable, average='binary')".
+        - To make inference call "model_inference(feature_values)"
         - Use "compute_accuracy_metrics(target_variable, average)" if user asks for accuracy scores for average 'micro', 'weighted', etc.
-        - Use "export_decision_tree_to_text" if user wants to visualize the trained decision tree.
+        - Use "export_decision_tree_to_text()" if user wants to visualize the trained decision tree.
 
         If tools have been used, summarize their outputs clearly in your final response to the user.
         Do not respond until you have reviewed the results of any tool invocations.
@@ -329,7 +300,7 @@ async def build_graph(
         )
 
         try:
-            result = ml_agent.invoke({"messages": messages}, {"recursion_limit": 5})
+            result = ml_agent.invoke({"messages": messages}, {"recursion_limit": 10})
             return {"messages": result["messages"], "summary": summary}
         except ResponseError as e:
             logger.error(f"Ollama ResponseError while invoking 'ml_agent': {e}")
@@ -347,7 +318,7 @@ async def build_graph(
             return {"messages": messages + [{"role": "assistant", "content": user_friendly_msg}], "summary": summary}   
 
 
-    def router(state: State) -> Literal['pandas_agent', 'default_assistant', 'ml_agent']:
+    def router(state: State) -> Literal['pandas_agent', 'ml_agent']:
         n_msg = len(state["messages"])
 
         if n_msg < summary_thr:
@@ -376,12 +347,10 @@ async def build_graph(
             logger.warning(f"Unexpected router output: {e}. Falling back to 'pandas_agent'.")
             result = RouterModel(value="pandas_agent")
 
-        if result.value == 'pandas_agent':
-            return 'pandas_agent'
-        elif result.value == 'ml_agent':
+        if result.value == 'ml_agent':
             return 'ml_agent'
         else:
-            return 'default_assistant'
+            return 'pandas_agent'  # we forward 'default' -> 'pandas_agent'
 
     # Sqlite checkpointer
     sqlite_db_path = SQLITE_CHECKPOINTER_DB_PATH.as_posix()
@@ -395,7 +364,6 @@ async def build_graph(
     # Define nodes: these do the work
     builder.add_node("conversation", conversation_node)
     builder.add_node("pandas_agent", pandas_agent_node)
-    builder.add_node("default_assistant", default_node)
     builder.add_node("ml_agent", ml_agent_node)  # Add the new ML agent node
 
     # Define edges: these determine how the control flow moves
@@ -406,7 +374,6 @@ async def build_graph(
     )
     builder.add_edge("pandas_agent", END)
     builder.add_edge("ml_agent", END)
-    builder.add_edge("default_assistant", END)
 
     aconn = await aiosqlite.connect(sqlite_db_path)
     saver = AsyncSqliteSaver(aconn)

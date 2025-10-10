@@ -1,9 +1,10 @@
 import json
 import os
+from typing import Any, Dict
 
 import joblib
 import pandas as pd
-from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.metrics import make_scorer, f1_score, precision_score, recall_score
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_text
 
@@ -11,7 +12,7 @@ from src.logger import logger
 from src.variables import DATAFRAME_ASSISTANT_SAMPLE_CSV_PATH, DECISION_TREE_DIR
 
 
-def build_decision_tree_classifier(target_variable: str, average: str = "weighted"):
+def build_decision_tree_classifier(target_variable: str, average: str = "weighted") -> Dict[str, Any]:
     """
     Train a decision tree model and return {"model_uri": "...", "metrics": {...}}.    
     """
@@ -52,18 +53,19 @@ def build_decision_tree_classifier(target_variable: str, average: str = "weighte
     logger.info(f"#Train examples = {X_train.shape[0]}")
     logger.info(f"#Test examples = {X_test.shape[0]}")
 
-    clf = DecisionTreeClassifier(random_state=42)
+    clf = DecisionTreeClassifier(random_state=42, class_weight="balanced")
     param_grid = {
-        "max_depth": [3, 5, 7],
-        "min_samples_split": [2, 5, 10],
+        "max_depth": [3, 5, 7, 10],
+        "min_samples_split": [2, 4, 7],
         "min_samples_leaf": [1, 2, 4]
     }
     cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    f1_scorer = make_scorer(f1_score, average='macro') if len(CLASS_TO_LABEL) > 2 else make_scorer(f1_score, average='binary')
     grid_search = GridSearchCV(
         estimator=clf,
         param_grid=param_grid,
         cv=cv_strategy,        # stratified folds
-        scoring="f1_macro",
+        scoring=f1_scorer,
         n_jobs=-1,
         verbose=1
     )
@@ -120,7 +122,7 @@ def build_decision_tree_classifier(target_variable: str, average: str = "weighte
     }
 
 
-def load_trained_model():
+def load_trained_model() -> Dict[str, Any]:
     """Helper function for loading the trained decision tree model, related encodings, and processed dataframe."""
     model_uri = DECISION_TREE_DIR / "model.joblib"
     clf_model = joblib.load(model_uri)
@@ -141,14 +143,14 @@ def load_trained_model():
     }
 
 
-def compute_accuracy_metrics(target_variable: str, average: str):
+def compute_accuracy_metrics(target_variable: str, average: str) -> Dict[str, dict]:
     """
     Evaluate a trained decision tree model on train/test splits and log metrics.
     
     Parameters
     ----------
     target_variable : str
-        The target column name in the dataset (e.g. "Material").
+        The target column name in the dataset.
     average : str
         Averaging method for multi-class metrics (e.g., "micro", "macro", "weighted").
     """
@@ -191,33 +193,19 @@ def compute_accuracy_metrics(target_variable: str, average: str):
     return {'train': train_data_metrics, 'test': test_data_metrics}
 
 
-def model_inference(feature_values: list[list]):
+def model_inference(feature_values: Dict[str, list]) -> Dict[str, list]:
     """Load model and return {"prediction": ...}."""
+    for k, v in feature_values.items():
+        if not isinstance(v, list):
+            feature_values[k] = [v]
+
     model = load_trained_model()
     clf = model['decision_tree_model']
-    col_mapper = model['column_ordinal_encodings']
     class_to_label = model['class_to_label']
-
-    if isinstance(feature_values, list):
-        if not all(isinstance(item, list) for item in feature_values):
-            feature_values = [feature_values]
     
-    processed_values = []
-    columns = list(col_mapper.keys())
-    for row in feature_values:
-        k = 0
-        tmp_processed = []
-        for item in row:
-            if isinstance(item, str):
-                print(k, columns[k], item, col_mapper[columns[k]][item])
-                tmp_processed.append(col_mapper[columns[k]][item])
-                k+=1
-            else:
-                tmp_processed.append(item)
-        
-        processed_values.append(tmp_processed)
+    X_test = pd.DataFrame.from_dict(feature_values)
 
-    predicted_classes = clf.predict(processed_values)
+    predicted_classes = clf.predict(X_test)
     prediction = [class_to_label[str(item)] for item in predicted_classes]
 
     return {"prediction": prediction}

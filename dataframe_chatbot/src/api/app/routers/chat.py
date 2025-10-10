@@ -43,7 +43,7 @@ async def dataframe_assistant_chat(
     async def response_generator():
         has_yielded = False
         async for msg, metadata in stream:
-            if metadata['langgraph_node'] in {'default_assistant', 'synthesizer', 'agent'}:
+            if metadata['langgraph_node'] == 'agent':
                 if msg.content:
                     yield msg.content
                     has_yielded = True
