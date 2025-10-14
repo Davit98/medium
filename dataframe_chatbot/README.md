@@ -14,7 +14,7 @@ ollama pull gpt-oss:20b
 
 **Step 2:** Preload the model and keep it in memory:
 ```bash
-curl http://localhost:11434/api/generate -d '{"model": "gpt-oss:20b", "keep_alive": -1, "options": {"num_ctx": 4096}}'
+curl http://localhost:11434/api/generate -d '{"model": "gpt-oss:20b", "keep_alive": -1}'
 ```
 
 This ensures the model remains active in memory for faster inference during development.
