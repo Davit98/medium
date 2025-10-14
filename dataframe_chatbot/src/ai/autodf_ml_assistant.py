@@ -3,7 +3,7 @@ import sqlite3
 from typing import Annotated, Literal, Tuple, Union
 
 import aiosqlite
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from langchain_experimental.tools import PythonAstREPLTool
 from langchain_ollama import ChatOllama
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -145,18 +145,20 @@ async def build_graph(
 
     # Node
     def conversation_node(state: State):
-        n_msg = len(state["messages"])
+        filtered_messages = [
+            msg for msg in state["messages"] if msg.type in {"human", "ai"} and msg.content
+        ]
+        n_msg = len(filtered_messages)
 
         summary = state.get("summary")
         if n_msg > summary_thr and (n_msg - 1) % summary_thr == 0:
-            messages = state["messages"][-(summary_thr + 1):]
+            messages = filtered_messages[-(summary_thr + 1):]
 
             conversation_history = []
             for msg in messages:
-                if isinstance(msg, HumanMessage):
+                if msg.type == "human":
                     conversation_history.append(f"Human: {msg.content}")
-                    
-                if isinstance(msg, AIMessage) and not msg.tool_calls:
+                elif msg.type == "ai":
                     conversation_history.append(f"AI: {msg.content}")
 
             human_ai_messages = "\n".join([item for item in conversation_history[:-1]])
@@ -181,14 +183,16 @@ async def build_graph(
 
             response = llm.invoke(summary_message)
 
-            return {"messages": state["messages"], "summary": response.content}
+            return {"summary": response.content}
 
-        return {"messages": state["messages"], "summary": summary}
+        return {"summary": summary}
 
     # Node
     def pandas_agent_node(state: State):
-        messages = state["messages"]
-        n_msg = len(messages)
+        filtered_messages = [
+            msg for msg in state["messages"] if msg.type in {"human", "ai"} and msg.content
+        ]
+        n_msg = len(filtered_messages)  
 
         # Create Python REPL tool with access to dataframe
         python_tool = PythonAstREPLTool(locals={
@@ -198,10 +202,10 @@ async def build_graph(
         n_msg = len(state["messages"])
 
         if n_msg < summary_thr:
-            messages = state["messages"]
+            messages = filtered_messages
         else:
             idx = (n_msg % summary_thr) + n_msg_overlap
-            messages = state["messages"][-idx:]
+            messages = filtered_messages[-idx:]
 
         if summary := state.get("summary"):
             summary_prompt = f"""
@@ -239,17 +243,22 @@ async def build_graph(
                 "⚠️ Something went wrong on my side. "
                 "I couldn’t complete your request, please try again."
             )
-            return {"messages": messages + [{"role": "assistant", "content": user_friendly_msg}], "summary": summary}
+            return {"messages": {"role": "assistant", "content": user_friendly_msg}, "summary": summary}
         except GraphRecursionError as e:
             logger.error(f"GraphRecursionError occured while invoking 'pandas_agent': {e}")
             user_friendly_msg = (
                 "Sorry, I ran out of reasoning steps (recursion limit reached). " 
                 "Please rephrase or simplify your request."
             )
-            return {"messages": messages + [{"role": "assistant", "content": user_friendly_msg}], "summary": summary}
+            return {"messages": {"role": "assistant", "content": user_friendly_msg}, "summary": summary}
 
     # Node
-    def ml_agent_node(state: State):        
+    def ml_agent_node(state: State):
+        filtered_messages = [
+            msg for msg in state["messages"] if msg.type in {"human", "ai"} and msg.content
+        ]
+        n_msg = len(filtered_messages)  
+
         # Create Python REPL tool with access to ML functions
         python_tool = PythonAstREPLTool(locals={
             "build_decision_tree_classifier": build_decision_tree_classifier,
@@ -258,13 +267,11 @@ async def build_graph(
             "export_decision_tree_to_text": export_decision_tree_to_text
         })
 
-        n_msg = len(state["messages"])
-
         if n_msg < summary_thr:
-            messages = state["messages"]
+            messages = filtered_messages
         else:
             idx = (n_msg % summary_thr) + n_msg_overlap
-            messages = state["messages"][-idx:]
+            messages = filtered_messages[-idx:]
 
         if summary := state.get("summary"):
             summary_prompt = f"""
@@ -309,24 +316,27 @@ async def build_graph(
                 "⚠️ Something went wrong on my side. "
                 "I couldn’t complete your request, please try again."
             )
-            return {"messages": messages + [{"role": "assistant", "content": user_friendly_msg}], "summary": summary}     
+            return {"messages": {"role": "assistant", "content": user_friendly_msg}, "summary": summary}     
         except GraphRecursionError as e:
             logger.error(f"GraphRecursionError occured while invoking 'ml_agent': {e}")
             user_friendly_msg = (
                 "Sorry, I ran out of reasoning steps (recursion limit reached). " 
                 "Please rephrase or simplify your request."
             )
-            return {"messages": messages + [{"role": "assistant", "content": user_friendly_msg}], "summary": summary}   
+            return {"messages": {"role": "assistant", "content": user_friendly_msg}, "summary": summary}   
 
 
     def router(state: State) -> Literal['pandas_agent', 'ml_agent']:
-        n_msg = len(state["messages"])
+        filtered_messages = [
+            msg for msg in state["messages"] if msg.type in {"human", "ai"} and msg.content
+        ]
+        n_msg = len(filtered_messages)  
 
         if n_msg < summary_thr:
-            messages = state["messages"]
+            messages = filtered_messages
         else:
             idx = (n_msg % summary_thr) + n_msg_overlap
-            messages = state["messages"][-idx:]
+            messages = filtered_messages[-idx:]
 
         if summary := state.get("summary"):
             summary_prompt = f"""
