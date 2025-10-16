@@ -10,7 +10,7 @@ async def initialize_assistant_graph():
     """Initialize the assistant graph during app startup"""
     global dataframe_assistant_graph
     
-    from src.ai.autodf_ml_assistant import build_graph
+    from src.ai.pandas_ml_assistant import build_graph
     
     dataframe_assistant_graph = await build_graph()
 
