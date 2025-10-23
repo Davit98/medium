@@ -150,7 +150,6 @@ async def build_graph(
         ]
         n_msg = len(filtered_messages)
 
-        summary = state.get("summary")
         if n_msg > summary_thr and (n_msg - 1) % summary_thr == 0:
             messages = filtered_messages[-(summary_thr + 1):]
 
@@ -162,6 +161,7 @@ async def build_graph(
                     conversation_history.append(f"AI: {msg.content}")
 
             human_ai_messages = "\n".join([item for item in conversation_history[:-1]])
+            summary = state.get("summary")
             if summary:
                 summary_message = f"""
                 This is a summary of the conversation so far: '{summary}'
@@ -184,8 +184,6 @@ async def build_graph(
             response = llm.invoke(summary_message)
 
             return {"summary": response.content}
-
-        return {"summary": summary}
 
     # Node
     def pandas_agent_node(state: State):
@@ -215,15 +213,23 @@ async def build_graph(
             summary_prompt = ""
 
 
-        prompt = f"""You are a helpful ML assistant that has access to the tools below to answer user questions.
+        prompt = f"""You are a helpful assistant that has access to the tools below to answer user questions.
 
         Available tools:
-        - python_tool: A Python shell with access to a pandas DataFrame (df)
+        - python_tool: A Python shell with access to a pandas DataFrame (df) with the following columns:
+        {df.columns.tolist()}
 
-        Given a user question, write the Python code to answer it. 
+        IMPORTANT: When calling tools, you MUST use the exact JSON format:
+        {{"query": "your_python_code_here"}}
+
+        Example tool call:
+        {{"query": "df.head()"}}
+
+        Given a user question, write the Python code to answer it and wrap it in the proper JSON tool call format.
 
         If tools have been used, summarize their outputs clearly in your final response to the user.
-        Do not respond until you have reviewed the results of any tool invocations.
+        DO NOT respond until you have reviewed the results of any tool invocations.
+        Please make your answer as concise as possible.
 
         {summary_prompt}
         """
@@ -236,21 +242,21 @@ async def build_graph(
 
         try:
             result = pandas_agent.invoke({"messages": messages}, {"recursion_limit": 10})
-            return {"messages": result["messages"], "summary": state["summary"]}
+            return {"messages": result["messages"]}
         except ResponseError as e:
             logger.error(f"Ollama ResponseError while invoking 'pandas_agent': {e}")
             user_friendly_msg = (
                 "⚠️ Something went wrong on my side. "
                 "I couldn’t complete your request, please try again."
             )
-            return {"messages": {"role": "assistant", "content": user_friendly_msg}, "summary": summary}
+            return {"messages": {"role": "assistant", "content": user_friendly_msg}}
         except GraphRecursionError as e:
             logger.error(f"GraphRecursionError occured while invoking 'pandas_agent': {e}")
             user_friendly_msg = (
                 "Sorry, I ran out of reasoning steps (recursion limit reached). " 
                 "Please rephrase or simplify your request."
             )
-            return {"messages": {"role": "assistant", "content": user_friendly_msg}, "summary": summary}
+            return {"messages": {"role": "assistant", "content": user_friendly_msg}}
 
     # Node
     def ml_agent_node(state: State):
@@ -309,21 +315,21 @@ async def build_graph(
 
         try:
             result = ml_agent.invoke({"messages": messages}, {"recursion_limit": 10})
-            return {"messages": result["messages"], "summary": summary}
+            return {"messages": result["messages"]}
         except ResponseError as e:
             logger.error(f"Ollama ResponseError while invoking 'ml_agent': {e}")
             user_friendly_msg = (
                 "⚠️ Something went wrong on my side. "
                 "I couldn’t complete your request, please try again."
             )
-            return {"messages": {"role": "assistant", "content": user_friendly_msg}, "summary": summary}     
+            return {"messages": {"role": "assistant", "content": user_friendly_msg}}     
         except GraphRecursionError as e:
             logger.error(f"GraphRecursionError occured while invoking 'ml_agent': {e}")
             user_friendly_msg = (
                 "Sorry, I ran out of reasoning steps (recursion limit reached). " 
                 "Please rephrase or simplify your request."
             )
-            return {"messages": {"role": "assistant", "content": user_friendly_msg}, "summary": summary}   
+            return {"messages": {"role": "assistant", "content": user_friendly_msg}}   
 
 
     def router(state: State) -> Literal['pandas_agent', 'ml_agent']:
