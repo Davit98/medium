@@ -7,7 +7,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, MessagesState, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from src.ai.rag.data import load_mini_wikipedia
+from src.ai.rag.data import load_thesis_tex
 from src.ai.rag.retriever import hybrid_retrieval
 from src.utils import format_docs
 from src.variables import (
@@ -121,15 +121,15 @@ async def build_graph() -> CompiledStateGraph:
                 """
 
         documents = None
-        chroma_persist_dir_path = (ROOT_DIR / "mini-wiki").as_posix()
+        chroma_persist_dir_path = (ROOT_DIR / "phd-thesis").as_posix()
         if not os.path.exists(chroma_persist_dir_path):
-            documents = load_mini_wikipedia() 
+            documents = load_thesis_tex() 
   
         docs = await hybrid_retrieval(
             query=messages[-1].content,
             llm=llm,
             chroma_persist_dir_path=chroma_persist_dir_path,
-            chroma_collection_name="wiki-v1",
+            chroma_collection_name="phd-thesis",
             documents=documents,
             previous_qa=previous_qa,
             embedding_model=vLLM_EMBEDDING_MODEL,
