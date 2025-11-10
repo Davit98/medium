@@ -16,7 +16,8 @@ dependencies = [
     "vllm (==0.10.2)",
     "aiosqlite (==0.21.0)",
     "langgraph-checkpoint-sqlite (==2.0.11)",
-    "langfuse (==3.9.0)"
+    "langfuse (==3.9.0)",
+    "rank-bm25 (==0.2.2)"
 ]
 
 [tool.poetry]

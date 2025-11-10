@@ -122,7 +122,7 @@ async def build_graph() -> CompiledStateGraph:
 
         documents = None
         chroma_persist_dir_path = (ROOT_DIR / "phd-thesis").as_posix()
-        if not os.path.exists(chroma_persist_dir_path):
+        if not os.path.exists(chroma_persist_dir_path) or ALPHA != 1.:
             documents = load_thesis_tex() 
   
         docs = await hybrid_retrieval(

@@ -11,14 +11,18 @@ from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+import nltk
 from nltk.tokenize import word_tokenize
 
 from src.logger import logger
 from src.variables import TOP_K, VLLM_EMBEDDING_API_URL, vLLM_EMBEDDING_MODEL
 
+nltk.download('punkt')
+nltk.download('punkt_tab')
 
 # Cache retrievers to avoid recreating them on every request
-_retriever_cache = {}
+_chroma_retriever_cache = {}
+_bm25_retriever_cache = {}
 
 
 def get_chroma_retriever(chroma_persist_dir_path: str,
@@ -57,9 +61,9 @@ def get_chroma_retriever(chroma_persist_dir_path: str,
         Instance that allows similarity-based querying over the Chroma vector store.
     """
     cache_key = (chroma_persist_dir_path, chroma_collection_name, embedding_model, k)
-    if cache_key in _retriever_cache:
+    if cache_key in _chroma_retriever_cache:
         logger.info("Using cached Chroma retriever")
-        return _retriever_cache[cache_key]
+        return _chroma_retriever_cache[cache_key]
 
     local_embeddings = OpenAIEmbeddings(
         model=embedding_model,
@@ -89,7 +93,7 @@ def get_chroma_retriever(chroma_persist_dir_path: str,
         logger.info(f"Process finished! Collection is persisted to `{chroma_persist_dir_path}`")
 
     chroma_retriever = chroma_vectorstore.as_retriever(search_kwargs={'k': k}, **retriever_kwargs)
-    _retriever_cache[cache_key] = chroma_retriever
+    _chroma_retriever_cache[cache_key] = chroma_retriever
 
     return chroma_retriever
 
@@ -111,7 +115,11 @@ def get_bm25_retriever(documents: List[Document], k: int = TOP_K) -> BM25Retriev
     bm25_retriever : BM25Retriever
         Instance configured with the provided documents and retrieval parameter.
     """
+    if _bm25_retriever_cache:
+        return _bm25_retriever_cache['bm25']
+
     bm25_retriever = BM25Retriever.from_documents(documents, k=k, preprocess_func=word_tokenize)
+    _bm25_retriever_cache['bm25'] = bm25_retriever
 
     return bm25_retriever
 

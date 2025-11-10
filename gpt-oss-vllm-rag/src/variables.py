@@ -13,7 +13,7 @@ VLLM_EMBEDDING_API_URL = "http://localhost:3002/v1"
 vLLM_EMBEDDING_MODEL = "nomic-ai/nomic-embed-text-v1.5"
 
 TOP_K = 2  # top k most relevant items to retrieve
-ALPHA = 1.  # weight for the dense retriever in the hybrid ensemble
+ALPHA = 0.5  # weight for the dense retriever in the hybrid ensemble
 
 vLLM_MODEL = "openai/gpt-oss-20b"
 TEMPERATURE = 0.7
