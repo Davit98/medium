@@ -6,9 +6,11 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, MessagesState, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+import openai
 
 from src.ai.rag.data import load_thesis_tex
 from src.ai.rag.retriever import hybrid_retrieval
+from src.logger import logger
 from src.utils import format_docs
 from src.variables import (
     ALPHA,
@@ -160,7 +162,13 @@ async def build_graph() -> CompiledStateGraph:
         context = state.get("context")
         prompt = [synthesizer_system_message(context, summary_prompt)] + messages
 
-        return {"messages": await llm.ainvoke(prompt)}
+        try:
+            result = await llm.ainvoke(prompt)
+        except openai.APIError as e:
+            logger.error(f"OpenAI API error occured while invoking the LLM: {e}")
+            result = "I apologize, but I couldn't generate a response to your question. Could you please rephrase or provide more context?"
+
+        return {"messages": result}
 
     # Graph
     builder = StateGraph(State)
